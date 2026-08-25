@@ -13,10 +13,12 @@ const { Pool } = pg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Data directory for local fallback
-const dataDir = path.join(__dirname, 'data');
+// Data directory for local fallback (use /tmp on Vercel serverless if needed)
+const dataDir = process.env.VERCEL ? '/tmp' : path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+  try {
+    fs.mkdirSync(dataDir, { recursive: true });
+  } catch (e) {}
 }
 
 let pgPool = null;
@@ -71,9 +73,9 @@ if (databaseUrl && databaseUrl.startsWith('postgres')) {
       );
     `).then(() => {
       isPgConnected = true;
-      console.log('🐘 تم الاتصال بقاعدة بيانات Neon PostgreSQL السحابية بنجاح وإنشاء الجداول!');
+      console.log('🐘 تم الاتصال بقاعدة بيانات Neon PostgreSQL السحابية بنجاح!');
     }).catch(err => {
-      console.error('فشل إعداد جداول PostgreSQL:', err.message);
+      console.warn('تنبيه تهيئة PostgreSQL:', err.message);
     });
 
   } catch (err) {
@@ -86,7 +88,9 @@ const jsonDbPath = path.join(dataDir, 'zarathustra_store.json');
 function readJsonStore() {
   if (!fs.existsSync(jsonDbPath)) {
     const initial = { analyses: [], chats: [], progress: [], glossary: [] };
-    fs.writeFileSync(jsonDbPath, JSON.stringify(initial, null, 2), 'utf-8');
+    try {
+      fs.writeFileSync(jsonDbPath, JSON.stringify(initial, null, 2), 'utf-8');
+    } catch (e) {}
     return initial;
   }
   try {
@@ -97,13 +101,14 @@ function readJsonStore() {
 }
 
 function writeJsonStore(data) {
-  fs.writeFileSync(jsonDbPath, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(jsonDbPath, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (e) {}
 }
 
 export const db = {
-  // Save Analysis (Async support for Postgres)
   async saveAnalysis({ quote, analysis, mode = 'full', tags = '', deviceInfo = '' }) {
-    if (pgPool && isPgConnected) {
+    if (pgPool) {
       try {
         const res = await pgPool.query(
           `INSERT INTO analyses (quote, analysis, mode, tags, device_info, created_at)
@@ -112,11 +117,10 @@ export const db = {
         );
         return res.rows[0];
       } catch (err) {
-        console.error('Postgres insert error, falling back to local store:', err.message);
+        console.error('Postgres insert error, using local fallback:', err.message);
       }
     }
 
-    // Local JSON Fallback
     const store = readJsonStore();
     const newItem = {
       id: Date.now(),
@@ -132,9 +136,8 @@ export const db = {
     return newItem;
   },
 
-  // Get Analyses
   async getAnalyses({ limit = 100, search = '' } = {}) {
-    if (pgPool && isPgConnected) {
+    if (pgPool) {
       try {
         if (search) {
           const res = await pgPool.query(
@@ -164,9 +167,8 @@ export const db = {
     return list.slice(0, limit);
   },
 
-  // Delete Analysis
   async deleteAnalysis(id) {
-    if (pgPool && isPgConnected) {
+    if (pgPool) {
       try {
         await pgPool.query(`DELETE FROM analyses WHERE id = $1`, [id]);
         return true;
@@ -181,9 +183,8 @@ export const db = {
     return true;
   },
 
-  // Save Chat Message
   async saveChat({ analysisId = 0, role, content }) {
-    if (pgPool && isPgConnected) {
+    if (pgPool) {
       try {
         const res = await pgPool.query(
           `INSERT INTO chats (analysis_id, role, content, created_at)
@@ -203,12 +204,11 @@ export const db = {
     return newMsg;
   },
 
-  // Database Stats
   async getStats() {
     let count = 0;
     let type = 'JSON Store (محلي)';
 
-    if (pgPool && isPgConnected) {
+    if (pgPool) {
       try {
         const res = await pgPool.query(`SELECT COUNT(*) as count FROM analyses`);
         count = parseInt(res.rows[0].count, 10);
@@ -222,7 +222,7 @@ export const db = {
     return {
       totalAnalyses: count,
       databaseType: type,
-      isCloud: isPgConnected
+      isCloud: Boolean(pgPool)
     };
   }
 };

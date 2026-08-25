@@ -26,7 +26,10 @@ const HOST = '0.0.0.0';
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Static files path for both local and Vercel Serverless
+const publicPath = path.join(process.cwd(), 'public');
+app.use(express.static(publicPath));
 
 // Configure multer for file uploads
 const upload = multer({
@@ -39,7 +42,6 @@ let googleAuthClient = null;
 let projectId = 'gen-lang-client-0148309017';
 
 function initGoogleAuth() {
-  // Option A: From Environment Variable (Ideal for Vercel / Cloud)
   if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
     try {
       const credentials = typeof process.env.GOOGLE_SERVICE_ACCOUNT_KEY === 'string'
@@ -51,14 +53,13 @@ function initGoogleAuth() {
         credentials: credentials,
         scopes: ['https://www.googleapis.com/auth/cloud-platform']
       });
-      console.log(`🔑 تم تفعيل مفتاح Google Cloud Console من متغيرات البيئة السحابية (Vercel)`);
+      console.log(`🔑 تم تفعيل مفتاح Google Cloud Console من متغيرات البيئة السحابية`);
       return;
     } catch (e) {
-      console.error('خطأ في معالجة GOOGLE_SERVICE_ACCOUNT_KEY من متغيرات البيئة:', e.message);
+      console.error('خطأ في معالجة GOOGLE_SERVICE_ACCOUNT_KEY:', e.message);
     }
   }
 
-  // Option B: From local JSON file (Local Desktop)
   try {
     const files = fs.readdirSync(__dirname);
     const jsonKey = files.find(f => f.startsWith('gen-lang-client-') && f.endsWith('.json'));
@@ -191,6 +192,11 @@ function getLocalIp() {
   return 'localhost';
 }
 
+// Root page fallback
+app.get('/', (req, res) => {
+  res.sendFile(path.join(publicPath, 'index.html'));
+});
+
 // ----------------------------------------------------
 // DATABASE & JOURNAL API ENDPOINTS (Neon PostgreSQL)
 // ----------------------------------------------------
@@ -242,7 +248,7 @@ app.get('/api/status', async (req, res) => {
   res.json({
     status: 'ok',
     hasApiKey: hasServiceAccount || hasEnvKey,
-    authMethod: hasServiceAccount ? 'Google Cloud Service Account (Console JSON)' : (hasEnvKey ? 'API Key' : 'none'),
+    authMethod: hasServiceAccount ? 'Google Cloud Service Account' : (hasEnvKey ? 'API Key' : 'none'),
     projectId: projectId,
     port: PORT,
     localIp: getLocalIp(),
@@ -263,7 +269,7 @@ app.post('/api/set-key', (req, res) => {
 
 app.get('/api/glossary', (req, res) => {
   try {
-    const glossaryPath = path.join(__dirname, 'public', 'glossary.json');
+    const glossaryPath = path.join(publicPath, 'glossary.json');
     if (fs.existsSync(glossaryPath)) {
       const data = JSON.parse(fs.readFileSync(glossaryPath, 'utf-8'));
       return res.json(data);
