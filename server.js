@@ -37,70 +37,6 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 }
 });
 
-// Robust Google Service Account Initializer
-let googleAuthClient = null;
-let projectId = 'gen-lang-client-0148309017';
-let authInitError = null;
-
-function getGoogleAuthClient() {
-  if (googleAuthClient) return googleAuthClient;
-
-  // 1. Try GOOGLE_SERVICE_ACCOUNT_KEY from Environment Variables (Vercel / Cloud)
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-    try {
-      let rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY.trim();
-      
-      // Handle base64 encoded JSON
-      if (!rawKey.startsWith('{') && rawKey.length > 50) {
-        try {
-          rawKey = Buffer.from(rawKey, 'base64').toString('utf-8');
-        } catch (e) {}
-      }
-
-      const credentials = typeof rawKey === 'string' ? JSON.parse(rawKey) : rawKey;
-      
-      // Crucial fix: Vercel environment variables escape newlines as \\n
-      if (credentials.private_key && credentials.private_key.includes('\\n')) {
-        credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-      }
-
-      projectId = credentials.project_id || projectId;
-      googleAuthClient = new GoogleAuth({
-        credentials: credentials,
-        scopes: ['https://www.googleapis.com/auth/cloud-platform']
-      });
-      console.log(`🔑 تم تهيئة حساب الخدمة بنجاح من متغيرات البيئة (Project: ${projectId})`);
-      return googleAuthClient;
-    } catch (e) {
-      authInitError = e.message;
-      console.error('خطأ في معالجة GOOGLE_SERVICE_ACCOUNT_KEY:', e.message);
-    }
-  }
-
-  // 2. Try local JSON file (Local Desktop)
-  try {
-    const files = fs.readdirSync(__dirname);
-    const jsonKey = files.find(f => f.startsWith('gen-lang-client-') && f.endsWith('.json'));
-    if (jsonKey) {
-      const serviceAccountPath = path.join(__dirname, jsonKey);
-      const keyData = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8'));
-      projectId = keyData.project_id || projectId;
-      googleAuthClient = new GoogleAuth({
-        keyFile: serviceAccountPath,
-        scopes: ['https://www.googleapis.com/auth/cloud-platform']
-      });
-      console.log(`🔑 تم تهيئة حساب الخدمة من الملف المحلي: [${jsonKey}]`);
-      return googleAuthClient;
-    }
-  } catch (e) {
-    authInitError = e.message;
-  }
-
-  return null;
-}
-
-getGoogleAuthClient();
-
 // Master Nietzschean Iraqi Scholar System Instruction
 const SYSTEM_PROMPT = `
 أنت الفيلسوف والمفكر المساعد "رفيق زرادشت"، خبير متعمق جداً في فلسفة فريدريك نيتشه وكتابه الخالد "هكذا تكلم زرادشت" (Also sprach Zarathustra).
@@ -129,22 +65,81 @@ const SYSTEM_PROMPT = `
 - لا تكن سطحياً، بل فكك المعنى الفلسفي الحقيقي بذكاء ووضوح.
 `;
 
-// Helper: Stream response from Vertex AI with fallback
-async function streamVertexAI(contents, systemPrompt, res, modelName = 'gemini-3.7-flash') {
-  const auth = getGoogleAuthClient();
-  if (!auth) {
-    throw new Error('لم يتم العثور على مصادقة Google Console أو مفتاح الخدمة.');
+// Helper to resolve Google Service Account Credentials from any source
+function resolveServiceAccount() {
+  const envKeys = [
+    process.env.GOOGLE_SERVICE_ACCOUNT_KEY,
+    process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
+    process.env.GCP_SERVICE_ACCOUNT_KEY,
+    process.env.SERVICE_ACCOUNT_KEY
+  ];
+
+  for (const raw of envKeys) {
+    if (raw && raw.trim()) {
+      try {
+        let clean = raw.trim();
+        // Check for base64
+        if (!clean.startsWith('{') && clean.length > 50) {
+          try {
+            clean = Buffer.from(clean, 'base64').toString('utf-8');
+          } catch (e) {}
+        }
+        const parsed = typeof clean === 'string' ? JSON.parse(clean) : clean;
+        if (parsed.private_key && parsed.private_key.includes('\\n')) {
+          parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+        }
+        return {
+          credentials: parsed,
+          projectId: parsed.project_id || 'gen-lang-client-0148309017'
+        };
+      } catch (e) {
+        console.error('Failed to parse service account env key:', e.message);
+      }
+    }
   }
 
-  const client = await auth.getClient();
-  const tokenResp = await client.getAccessToken();
-  const token = tokenResp.token;
+  // Local file check
+  try {
+    const files = fs.readdirSync(__dirname);
+    const jsonKey = files.find(f => f.startsWith('gen-lang-client-') && f.endsWith('.json'));
+    if (jsonKey) {
+      const p = path.join(__dirname, jsonKey);
+      const data = JSON.parse(fs.readFileSync(p, 'utf-8'));
+      return {
+        keyFile: p,
+        credentials: data,
+        projectId: data.project_id || 'gen-lang-client-0148309017'
+      };
+    }
+  } catch (e) {}
 
-  // Stream URL
-  const streamUrl = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models/${modelName}:streamGenerateContent?alt=sse`;
+  return null;
+}
+
+// Call Vertex AI Global Model with full streaming and fallback
+async function executeVertexAiAnalysis(parts, systemPrompt, res, modelName = 'gemini-3.7-flash') {
+  const sa = resolveServiceAccount();
+  if (!sa) {
+    throw new Error('لم يتم العثور على مفتاح Google Console Service Account. تأكد من إضافة GOOGLE_SERVICE_ACCOUNT_KEY في إعدادات Vercel.');
+  }
+
+  const authOptions = sa.keyFile
+    ? { keyFile: sa.keyFile, scopes: ['https://www.googleapis.com/auth/cloud-platform'] }
+    : { credentials: sa.credentials, scopes: ['https://www.googleapis.com/auth/cloud-platform'] };
+
+  const auth = new GoogleAuth(authOptions);
+  const client = await auth.getClient();
+  const token = (await client.getAccessToken()).token;
+
+  const url = `https://aiplatform.googleapis.com/v1/projects/${sa.projectId}/locations/global/publishers/google/models/${modelName}:streamGenerateContent?alt=sse`;
 
   const requestBody = {
-    contents: contents,
+    contents: [
+      {
+        role: 'user',
+        parts: parts
+      }
+    ],
     systemInstruction: {
       parts: [{ text: systemPrompt }]
     },
@@ -155,86 +150,98 @@ async function streamVertexAI(contents, systemPrompt, res, modelName = 'gemini-3
     }
   };
 
-  try {
-    const fetchResp = await fetch(streamUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    });
+  const fetchResp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(requestBody)
+  });
 
-    if (!fetchResp.ok) {
-      const errText = await fetchResp.text();
-      throw new Error(`خطأ من كوكل Vertex (${fetchResp.status}): ${errText}`);
-    }
+  if (!fetchResp.ok) {
+    const errText = await fetchResp.text();
+    throw new Error(`خطأ من كوكل Vertex (${fetchResp.status}): ${errText}`);
+  }
 
-    const reader = fetchResp.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-    let totalTextSent = '';
+  const reader = fetchResp.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+  let totalTextSent = '';
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('data: ')) {
-          const dataStr = trimmed.replace('data: ', '');
-          try {
-            const parsed = JSON.parse(dataStr);
-            if (parsed.candidates && parsed.candidates[0]?.content?.parts) {
-              for (const part of parsed.candidates[0].content.parts) {
-                if (part.text) {
-                  totalTextSent += part.text;
-                  res.write(`data: ${JSON.stringify({ chunk: part.text })}\n\n`);
-                }
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('data: ')) {
+        const dataStr = trimmed.replace('data: ', '');
+        try {
+          const parsed = JSON.parse(dataStr);
+          if (parsed.candidates && parsed.candidates[0]?.content?.parts) {
+            for (const part of parsed.candidates[0].content.parts) {
+              if (part.text) {
+                totalTextSent += part.text;
+                res.write(`data: ${JSON.stringify({ chunk: part.text })}\n\n`);
               }
             }
-          } catch (e) {}
-        }
+          }
+        } catch (e) {}
       }
     }
-
-    // If stream produced text, we are done
-    if (totalTextSent.trim()) {
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      return res.end();
-    }
-
-    // If stream was empty, try non-streaming generateContent fallback
-    console.log('Stream was empty, attempting direct generateContent...');
-    const directUrl = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models/${modelName}:generateContent`;
-    const directResp = await fetch(directUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    const directData = await directResp.json();
-    if (directData.candidates && directData.candidates[0]?.content?.parts?.[0]?.text) {
-      const fullText = directData.candidates[0].content.parts[0].text;
-      res.write(`data: ${JSON.stringify({ chunk: fullText })}\n\n`);
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      return res.end();
-    } else {
-      throw new Error('لم يتم استلام أي نص من نموذج الذكاء الاصطناعي: ' + JSON.stringify(directData));
-    }
-
-  } catch (err) {
-    console.error('Vertex AI invocation error:', err);
-    res.write(`data: ${JSON.stringify({ error: err.message || 'حدث خطأ أثناء معالجة الطلب' })}\n\n`);
-    res.end();
   }
+
+  if (totalTextSent.trim()) {
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    return res.end();
+  }
+
+  // Direct Fallback if streaming buffer was empty
+  const directUrl = `https://aiplatform.googleapis.com/v1/projects/${sa.projectId}/locations/global/publishers/google/models/${modelName}:generateContent`;
+  const directResp = await fetch(directUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(requestBody)
+  });
+
+  const directData = await directResp.json();
+  if (directData.candidates && directData.candidates[0]?.content?.parts?.[0]?.text) {
+    const fullText = directData.candidates[0].content.parts[0].text;
+    res.write(`data: ${JSON.stringify({ chunk: fullText })}\n\n`);
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    return res.end();
+  } else {
+    throw new Error('لم يتم استلام أي نص من نموذج الذكاء الاصطناعي: ' + JSON.stringify(directData));
+  }
+}
+
+// Call Google Generative AI (API Key fallback)
+async function executeApiKeyAnalysis(parts, systemPrompt, apiKey, res) {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-3.7-flash',
+    systemInstruction: systemPrompt
+  });
+
+  const genParts = parts.map(p => p.inlineData ? { inlineData: p.inlineData } : p.text);
+  const result = await model.generateContentStream(genParts);
+
+  for await (const chunk of result.stream) {
+    const chunkText = chunk.text();
+    if (chunkText) {
+      res.write(`data: ${JSON.stringify({ chunk: chunkText })}\n\n`);
+    }
+  }
+  res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+  res.end();
 }
 
 function getLocalIp() {
@@ -251,73 +258,59 @@ function getLocalIp() {
   return 'localhost';
 }
 
-// Root page fallback
+// Root page
 app.get('/', (req, res) => {
   res.sendFile(path.join(publicPath, 'index.html'));
 });
 
-// ----------------------------------------------------
-// DIAGNOSTIC ENDPOINT
-// ----------------------------------------------------
+// Diagnostics Endpoint
 app.get('/api/test-ai', async (req, res) => {
-  const auth = getGoogleAuthClient();
-  const hasEnvKey = Boolean(process.env.GEMINI_API_KEY);
-  const hasSaKey = Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+  const sa = resolveServiceAccount();
+  const directApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
-  let vertexStatus = 'untested';
-  let sampleOutput = null;
-  let testError = null;
+  let result = {
+    hasServiceAccount: Boolean(sa),
+    hasDirectApiKey: Boolean(directApiKey),
+    projectId: sa?.projectId || null,
+    testStatus: 'unknown',
+    details: null
+  };
 
-  if (auth) {
+  if (sa) {
     try {
+      const authOptions = sa.keyFile
+        ? { keyFile: sa.keyFile, scopes: ['https://www.googleapis.com/auth/cloud-platform'] }
+        : { credentials: sa.credentials, scopes: ['https://www.googleapis.com/auth/cloud-platform'] };
+      const auth = new GoogleAuth(authOptions);
       const client = await auth.getClient();
-      const tokenResp = await client.getAccessToken();
-      const token = tokenResp.token;
+      const token = (await client.getAccessToken()).token;
 
       const testResp = await fetch(
-        `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models/gemini-3.7-flash:generateContent`,
+        `https://aiplatform.googleapis.com/v1/projects/${sa.projectId}/locations/global/publishers/google/models/gemini-3.7-flash:generateContent`,
         {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: 'قل كلمة زرادشت بالعراقي' }] }]
-          })
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'سلام' }] }] })
         }
       );
-
       const testData = await testResp.json();
       if (testData.candidates) {
-        vertexStatus = 'connected_and_working';
-        sampleOutput = testData.candidates[0].content.parts[0].text;
+        result.testStatus = 'success';
+        result.details = testData.candidates[0].content.parts[0].text;
       } else {
-        vertexStatus = 'api_error';
-        testError = testData;
+        result.testStatus = 'api_error';
+        result.details = testData;
       }
     } catch (e) {
-      vertexStatus = 'auth_or_network_error';
-      testError = e.message;
+      result.testStatus = 'auth_error';
+      result.details = e.message;
     }
   }
 
-  res.json({
-    hasServiceAccountInEnv: hasSaKey,
-    hasApiKeyInEnv: hasEnvKey,
-    authClientReady: Boolean(auth),
-    authInitError: authInitError,
-    projectId: projectId,
-    vertexStatus: vertexStatus,
-    sampleOutput: sampleOutput,
-    testError: testError
-  });
+  res.json(result);
 });
 
-// ----------------------------------------------------
-// DATABASE & JOURNAL API ENDPOINTS
-// ----------------------------------------------------
-
+// Database Endpoints
 app.get('/api/journal', async (req, res) => {
   try {
     const search = req.query.search || '';
@@ -358,15 +351,15 @@ app.delete('/api/journal/:id', async (req, res) => {
 });
 
 app.get('/api/status', async (req, res) => {
-  const auth = getGoogleAuthClient();
-  const hasEnvKey = Boolean(process.env.GEMINI_API_KEY);
+  const sa = resolveServiceAccount();
+  const hasEnvKey = Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
   const stats = await db.getStats();
   
   res.json({
     status: 'ok',
-    hasApiKey: Boolean(auth) || hasEnvKey,
-    authMethod: auth ? 'Google Cloud Service Account (Console JSON)' : (hasEnvKey ? 'API Key' : 'none'),
-    projectId: projectId,
+    hasApiKey: Boolean(sa) || hasEnvKey,
+    authMethod: sa ? 'Google Cloud Service Account (Console JSON)' : (hasEnvKey ? 'API Key' : 'none'),
+    projectId: sa?.projectId || 'gen-lang-client-0148309017',
     port: PORT,
     localIp: getLocalIp(),
     localNetworkUrl: `http://${getLocalIp()}:${PORT}`,
@@ -429,6 +422,7 @@ app.post('/api/analyze', upload.single('image'), async (req, res) => {
 
   const parts = [];
 
+  // Handle uploaded image
   if (file) {
     parts.push({
       inlineData: {
@@ -473,40 +467,20 @@ app.post('/api/analyze', upload.single('image'), async (req, res) => {
 
   parts.push({ text: userInstruction });
 
-  const contents = [
-    {
-      role: 'user',
-      parts: parts
-    }
-  ];
-
   try {
-    const auth = getGoogleAuthClient();
-    if (auth) {
-      await streamVertexAI(contents, SYSTEM_PROMPT, res, 'gemini-3.7-flash');
+    const sa = resolveServiceAccount();
+    if (sa) {
+      await executeVertexAiAnalysis(parts, SYSTEM_PROMPT, res, 'gemini-3.7-flash');
       return;
     }
 
-    const customKey = req.headers['x-gemini-key'] || req.body.customKey || process.env.GEMINI_API_KEY;
-    if (!customKey) {
-      throw new Error('لم يتم العثور على مفتاح Google Console أو مفتاح Gemini API. يرجى التأكد من إضافة GOOGLE_SERVICE_ACCOUNT_KEY في Vercel.');
+    const customKey = req.headers['x-gemini-key'] || req.body.customKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (customKey) {
+      await executeApiKeyAnalysis(parts, SYSTEM_PROMPT, customKey, res);
+      return;
     }
-    const genAI = new GoogleGenerativeAI(customKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3.7-flash',
-      systemInstruction: SYSTEM_PROMPT
-    });
 
-    const genParts = parts.map(p => p.inlineData ? { inlineData: p.inlineData } : p.text);
-    const result = await model.generateContentStream(genParts);
-    for await (const chunk of result.stream) {
-      const chunkText = chunk.text();
-      if (chunkText) {
-        res.write(`data: ${JSON.stringify({ chunk: chunkText })}\n\n`);
-      }
-    }
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-    res.end();
+    throw new Error('لم يتم العثور على أي مفتاح في Vercel. يرجى إضافة GOOGLE_SERVICE_ACCOUNT_KEY في إعدادات Vercel ثم الضغط على Redeploy.');
   } catch (err) {
     console.error('Analysis error:', err);
     res.write(`data: ${JSON.stringify({ error: err.message || 'حدث خطأ أثناء معالجة الطلب' })}\n\n`);
@@ -524,46 +498,23 @@ app.post('/api/chat', async (req, res) => {
 
   const dynamicSystemPrompt = SYSTEM_PROMPT + `\nأنت تجري الآن حواراً ونقاشاً فلسفياً حياً وتفاعلياً مع القارئ حول كتاب هكذا تكلم زرادشت والمقطع الذي يقرأه.\nالسياق والمقطع الحالي:\n"""${contextQuote || 'نصوص زرادشت'}"""`;
 
-  const contents = history.map(item => ({
-    role: item.role === 'user' ? 'user' : 'model',
-    parts: [{ text: item.content }]
-  }));
-
-  contents.push({
-    role: 'user',
-    parts: [{ text: message }]
-  });
+  const parts = [];
+  parts.push({ text: `السياق الحالي: ${contextQuote || ''}\nالسؤال أو التعليق: ${message}` });
 
   try {
-    const auth = getGoogleAuthClient();
-    if (auth) {
-      await streamVertexAI(contents, dynamicSystemPrompt, res, 'gemini-3.7-flash');
+    const sa = resolveServiceAccount();
+    if (sa) {
+      await executeVertexAiAnalysis(parts, dynamicSystemPrompt, res, 'gemini-3.7-flash');
       return;
     }
 
-    const customKey = req.headers['x-gemini-key'] || req.body.customKey || process.env.GEMINI_API_KEY;
-    const genAI = new GoogleGenerativeAI(customKey);
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3.7-flash',
-      systemInstruction: dynamicSystemPrompt
-    });
-
-    const chat = model.startChat({
-      history: history.map(item => ({
-        role: item.role === 'user' ? 'user' : 'model',
-        parts: [{ text: item.content }]
-      }))
-    });
-
-    const result = await chat.sendMessageStream(message);
-    for await (const chunk of result.stream) {
-      const chunkText = chunk.text();
-      if (chunkText) {
-        res.write(`data: ${JSON.stringify({ chunk: chunkText })}\n\n`);
-      }
+    const customKey = req.headers['x-gemini-key'] || req.body.customKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    if (customKey) {
+      await executeApiKeyAnalysis(parts, dynamicSystemPrompt, customKey, res);
+      return;
     }
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-    res.end();
+
+    throw new Error('لم يتم العثور على مفتاح المصادقة.');
   } catch (err) {
     console.error('Chat error:', err);
     res.write(`data: ${JSON.stringify({ error: err.message || 'حدث خطأ أثناء المحادثة' })}\n\n`);
