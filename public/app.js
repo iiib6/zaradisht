@@ -1,5 +1,5 @@
 /**
- * رفيق زرادشت (Zarathustra Companion) - Frontend Logic with Database Sync & Multi-device Support
+ * رفيق زرادشت (Zarathustra Companion) - Frontend Controller with Live AI Diagnostics
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -96,7 +96,6 @@ document.addEventListener('DOMContentLoaded', () => {
     checkApiStatus();
   }
 
-  // Toast notification helper
   function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
@@ -116,7 +115,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 3500);
   }
 
-  // Tab switching
   function setupTabs() {
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -130,7 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Mode Selection
   function setupModeSelectors() {
     modeCards.forEach(card => {
       card.addEventListener('click', () => {
@@ -147,7 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return checked ? checked.value : 'full';
   }
 
-  // Image Upload & Drag-and-drop
   function setupImageHandlers() {
     dropZone.addEventListener('click', (e) => {
       if (e.target !== btnRemoveImage && !btnRemoveImage.contains(e.target)) {
@@ -211,7 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
     dropContent.classList.remove('hidden');
   }
 
-  // Global Ctrl + V paste listener
   function setupGlobalPaste() {
     window.addEventListener('paste', (e) => {
       const items = (e.clipboardData || e.originalEvent.clipboardData).items;
@@ -228,7 +223,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Sample Quotes Selection
   function setupTextHandlers() {
     sampleChips.forEach(chip => {
       chip.addEventListener('click', () => {
@@ -238,7 +232,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Document Upload (PDF/TXT)
   function setupDocHandlers() {
     fileDropZone.addEventListener('click', () => docFileInput.click());
     
@@ -282,7 +275,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Main Analysis Controller
   function setupAnalysisActions() {
     btnAnalyze.addEventListener('click', () => executeAnalysis());
     
@@ -400,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
               }
             } catch (jsonErr) {
               if (dataStr !== '[DONE]') {
-                console.error('SSE JSON parse error:', jsonErr);
+                console.error('SSE parse error:', jsonErr);
               }
             }
           }
@@ -408,16 +400,23 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       streamingBadge.classList.add('hidden');
+
+      if (!currentRawAnalysis.trim()) {
+        throw new Error('لم يتم استلام أي رد من السيرفر. يرجى التحقق من إعدادات المفتاح في Vercel.');
+      }
+
       followupChatSection.classList.remove('hidden');
       showToast('اكتمل الشرح والتحليل الفلسفي!', 'success');
 
     } catch (err) {
       streamingBadge.classList.add('hidden');
       analysisOutput.innerHTML = `
-        <div class="settings-status error">
-          <i class="fa-solid fa-triangle-exclamation"></i>
+        <div class="settings-status error" style="padding:16px;">
+          <i class="fa-solid fa-triangle-exclamation" style="font-size:22px;"></i>
           <div>
-            <strong>تنبيه:</strong> ${err.message}
+            <strong>تنبيه من السيرفر:</strong>
+            <p style="margin-top:6px; color:#fff;">${err.message}</p>
+            <small style="color:var(--gold-300);">💡 إذا كنت على Vercel، تأكد من إضافة <b>GOOGLE_SERVICE_ACCOUNT_KEY</b> أو <b>GEMINI_API_KEY</b> في إعدادات Vercel.</small>
           </div>
         </div>
       `;
@@ -428,7 +427,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Socratic Debate Chat
   function setupChat() {
     btnSendChat.addEventListener('click', sendChatMessage);
     chatInput.addEventListener('keypress', (e) => {
@@ -506,7 +504,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return msgEl;
   }
 
-  // Text-to-Speech (TTS)
   function toggleSpeech() {
     if (!('speechSynthesis' in window)) {
       showToast('المتصفح لا يدعم القراءة الصوتية', 'error');
@@ -538,7 +535,6 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast('جاري القراءة الصوتية...', 'info');
   }
 
-  // Database Journal Sync
   async function saveCurrentToJournal() {
     if (!currentRawAnalysis) {
       showToast('لا يوجد تحليل لحفظه', 'error');
@@ -564,7 +560,6 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error('فشل الحفظ في السيرفر');
       }
     } catch (err) {
-      // Local fallback
       const journal = JSON.parse(localStorage.getItem('zarathustra_journal') || '[]');
       journal.unshift({
         id: Date.now(),
@@ -635,7 +630,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Modals Controller
   function setupModals() {
     btnGlossary.addEventListener('click', () => {
       renderGlossary(glossaryData);
@@ -766,7 +760,6 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
   }
 
-  // Check Backend and API status + Network Mobile Info
   async function checkApiStatus() {
     try {
       const resp = await fetch('/api/status');
@@ -778,14 +771,14 @@ document.addEventListener('DOMContentLoaded', () => {
         apiStatusBadge.innerHTML = `
           <div>
             <i class="fa-solid fa-circle-check"></i>
-            <strong>المحرك جاهز (Gemini 3.7 Flash)</strong>
-            <br><small style="color:var(--gold-300);">📱 رابط الموبايل والأجهزة: <b>${data.localNetworkUrl}</b></small>
-            <br><small style="color:var(--text-muted);">🗄️ قاعدة البيانات: <b>${data.database.databaseType}</b> (${data.database.totalAnalyses} تحليل محفوظ)</small>
+            <strong>المحرك متصل: Gemini 3.7 Flash</strong>
+            <br><small style="color:var(--text-muted);">المصادقة: <b>${data.authMethod}</b></small>
+            <br><small style="color:var(--gold-300);">🗄️ قاعدة البيانات: <b>${data.database.databaseType}</b></small>
           </div>
         `;
       } else {
         apiStatusBadge.className = 'settings-status error';
-        apiStatusBadge.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i><span>يرجى إضافة مفتاح Gemini API</span>';
+        apiStatusBadge.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i><span>يرجى إضافة مفتاح Google Service Account في Vercel</span>';
       }
     } catch (e) {
       apiStatusBadge.className = 'settings-status error';
