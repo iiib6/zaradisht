@@ -36,11 +36,13 @@ const upload = multer({
 
 // Locate Google Service Account Key JSON
 function findServiceAccountKey() {
-  const files = fs.readdirSync(__dirname);
-  const jsonKey = files.find(f => f.startsWith('gen-lang-client-') && f.endsWith('.json'));
-  if (jsonKey) {
-    return path.join(__dirname, jsonKey);
-  }
+  try {
+    const files = fs.readdirSync(__dirname);
+    const jsonKey = files.find(f => f.startsWith('gen-lang-client-') && f.endsWith('.json'));
+    if (jsonKey) {
+      return path.join(__dirname, jsonKey);
+    }
+  } catch (e) {}
   return null;
 }
 
@@ -162,16 +164,17 @@ async function streamVertexAI(contents, systemPrompt, res, modelName = 'gemini-3
   res.end();
 }
 
-// Find local IPv4 address
 function getLocalIp() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+  try {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          return iface.address;
+        }
       }
     }
-  }
+  } catch (e) {}
   return 'localhost';
 }
 
@@ -431,12 +434,17 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-app.listen(PORT, HOST, () => {
-  const localIp = getLocalIp();
-  console.log(`====================================================`);
-  console.log(`🦅 رفيق زرادشت (Zarathustra Companion) يعمل الآن!`);
-  console.log(`💻 على هذه الحاسبة: http://localhost:${PORT}`);
-  console.log(`📱 على الموبايل والأجهزة الأخرى (نفس شبكة الواي فاي):`);
-  console.log(`   👉 http://${localIp}:${PORT}`);
-  console.log(`====================================================`);
-});
+// Start server if not running in a serverless environment (e.g. Vercel)
+if (!process.env.VERCEL) {
+  app.listen(PORT, HOST, () => {
+    const localIp = getLocalIp();
+    console.log(`====================================================`);
+    console.log(`🦅 رفيق زرادشت (Zarathustra Companion) يعمل الآن!`);
+    console.log(`💻 على هذه الحاسبة: http://localhost:${PORT}`);
+    console.log(`📱 على الموبايل والأجهزة الأخرى (نفس شبكة الواي فاي):`);
+    console.log(`   👉 http://${localIp}:${PORT}`);
+    console.log(`====================================================`);
+  });
+}
+
+export default app;
