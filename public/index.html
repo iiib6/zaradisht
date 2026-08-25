@@ -80,20 +80,24 @@
       <!-- Tab Contents -->
       <div class="tabs-body">
         
-        <!-- Tab 1: Image / Screenshot Paste -->
+        <!-- Tab 1: Image / Screenshot Paste (Multiple Images) -->
         <div id="tab-image" class="tab-pane active">
           <div class="drop-zone" id="dropZone">
-            <input type="file" id="imageInput" accept="image/*" class="file-input-hidden">
+            <input type="file" id="imageInput" accept="image/*" multiple class="file-input-hidden">
             <div class="drop-content" id="dropContent">
-              <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
-              <h3>اسحب الصورة هنا أو اضغط للاختيار</h3>
-              <p class="drop-hint">أو اضغط <kbd>Ctrl</kbd> + <kbd>V</kbd> بأي مكان للصق لقطة الشاشة مباشرة!</p>
+              <i class="fa-solid fa-images drop-icon"></i>
+              <h3>اسحب صورة أو عدة صور هنا (صفحات متتالية)</h3>
+              <p class="drop-hint">أو اضغط <kbd>Ctrl</kbd> + <kbd>V</kbd> للصق عدة صور متتالية من الحافظة!</p>
             </div>
-            <div class="preview-container hidden" id="previewContainer">
-              <img id="imagePreview" alt="معاينة الصفحة">
-              <button id="btnRemoveImage" class="btn-remove-img" title="حذف الصورة">
-                <i class="fa-solid fa-xmark"></i>
-              </button>
+            <div class="gallery-container hidden" id="galleryContainer">
+              <div class="gallery-header">
+                <span id="galleryCount" class="badge">0 صور</span>
+                <div class="gallery-actions">
+                  <button id="btnAddMoreImages" class="btn-text-sm" title="إضافة المزيد"><i class="fa-solid fa-plus"></i> إضافة صورة</button>
+                  <button id="btnClearAllImages" class="btn-text-sm danger" title="حذف الكل"><i class="fa-solid fa-trash"></i> مسح الكل</button>
+                </div>
+              </div>
+              <div class="gallery-grid" id="galleryGrid"></div>
             </div>
           </div>
         </div>

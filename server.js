@@ -31,10 +31,10 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 const publicPath = path.join(process.cwd(), 'public');
 app.use(express.static(publicPath));
 
-// Configure multer for file uploads
+// Configure multer for multi-file uploads (up to 15 images)
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }
+  limits: { fileSize: 30 * 1024 * 1024 }
 });
 
 // Master Nietzschean Iraqi Scholar System Instruction
@@ -43,7 +43,7 @@ const SYSTEM_PROMPT = `
 
 المهمة الأساسية:
 يقوم المستخدم بقراءة كتاب زرادشت ويواجه صعوبة في نصوصه الفلسفية الشعرية والاستعارات الرمزية المعقدة.
-مهمتك هي تفكيك وشرح أي نص، صورة صفحة، أو استفسار يرسله المستخدم بالتفصيل الدقيق والفلسفي، وبأسلوب **باللهجة العراقية الذكية، العميقة، الممتعة والمحببة** (تجمع بين الفصاحة الفلسفية والسلاسة العراقية الطبيعية بدون تكلف جاف).
+مهمتك هي تفكيك وشرح أي نص، صورة صفحة، أو عدة صور متتالية لصفحات يرسلها المستخدم بالتفصيل الدقيق والفلسفي، وبأسلوب **باللهجة العراقية الذكية، العميقة، الممتعة والمحببة** (تجمع بين الفصاحة الفلسفية والسلاسة العراقية الطبيعية بدون تكلف جاف).
 
 هيكل الإجابة والتحليل النموذجي:
 1. 🦅 **الزبدة وسالفة الفكرة (بالعراقي الواضح والمباشر)**:
@@ -60,14 +60,13 @@ const SYSTEM_PROMPT = `
    - خلاصة مكثفة ومؤثرة جداً بسطرين أو ثلاثة باللهجة العراقية.
 
 ملاحظات مهمة:
-- إذا كان المدخل صورة لصفحة من كتاب، ابدأ بقراءة النص الظاهر في الصورة أولاً بدقة (OCR)، ثم قدم التحليل.
+- إذا تم رفع صورة أو أكثر لصفحات الكتاب، اقرأ النصوص الظاهرة بالترتيب والتسلسل، ثم قدم التحليل التفكيكي الشامل.
 - إذا طلب المستخدم تبسيطاً إضافياً (سالفة كهوة) أو نقاشاً محدداً، ركز على النمط المطلوب مع الحفاظ على روح الفلسفة وعمقها.
 - لا تكن سطحياً، بل فكك المعنى الفلسفي الحقيقي بذكاء ووضوح.
 `;
 
 // Smart Universal Auth Resolver
 function resolveAuth(customKey) {
-  // 1. Check customKey passed from frontend Settings or Header
   if (customKey && customKey.trim()) {
     const raw = customKey.trim();
     if (raw.startsWith('{')) {
@@ -85,7 +84,6 @@ function resolveAuth(customKey) {
     }
   }
 
-  // 2. Check Environment Variables (Vercel)
   const envServiceAccount = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   if (envServiceAccount && envServiceAccount.trim()) {
     try {
@@ -106,7 +104,6 @@ function resolveAuth(customKey) {
     return { type: 'api_key', apiKey: envApiKey.trim() };
   }
 
-  // 3. Check Local JSON file
   try {
     const files = fs.readdirSync(__dirname);
     const jsonKey = files.find(f => f.startsWith('gen-lang-client-') && f.endsWith('.json'));
@@ -352,11 +349,11 @@ app.post('/api/parse-doc', upload.single('file'), async (req, res) => {
   }
 });
 
-// Core Analysis Endpoint
-app.post('/api/analyze', upload.single('image'), async (req, res) => {
-  const { text, prompt, mode, imageBase64 } = req.body;
+// Core Analysis Endpoint with Multi-Image Support
+app.post('/api/analyze', upload.array('images', 15), async (req, res) => {
+  const { text, prompt, mode, imageBase64, imagesBase64 } = req.body;
   const customKey = req.headers['x-gemini-key'] || req.body.customKey;
-  const file = req.file;
+  const files = req.files || (req.file ? [req.file] : []);
 
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -365,34 +362,59 @@ app.post('/api/analyze', upload.single('image'), async (req, res) => {
 
   const parts = [];
 
-  if (file) {
-    parts.push({
-      inlineData: {
-        data: file.buffer.toString('base64'),
-        mimeType: file.mimetype || 'image/jpeg'
-      }
-    });
-  } else if (imageBase64 && imageBase64.includes(',')) {
-    const mimeMatch = imageBase64.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,/);
-    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-    const base64Data = imageBase64.split(',')[1];
-    parts.push({
-      inlineData: {
-        data: base64Data,
-        mimeType: mimeType
-      }
-    });
+  // 1. Process multiple multipart uploaded files
+  if (files && files.length) {
+    for (const f of files) {
+      parts.push({
+        inlineData: {
+          data: f.buffer.toString('base64'),
+          mimeType: f.mimetype || 'image/jpeg'
+        }
+      });
+    }
+  }
+
+  // 2. Process multiple Base64 images
+  let allBase64 = [];
+  if (Array.isArray(imagesBase64) && imagesBase64.length) {
+    allBase64 = imagesBase64;
+  } else if (typeof imagesBase64 === 'string' && imagesBase64.startsWith('[')) {
+    try { allBase64 = JSON.parse(imagesBase64); } catch (e) {}
+  } else if (imageBase64) {
+    allBase64 = [imageBase64];
+  }
+
+  for (const imgStr of allBase64) {
+    if (typeof imgStr === 'string' && imgStr.includes(',')) {
+      const mimeMatch = imgStr.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      const base64Data = imgStr.split(',')[1];
+      parts.push({
+        inlineData: {
+          data: base64Data,
+          mimeType: mimeType
+        }
+      });
+    }
   }
 
   let userInstruction = '';
+  const isMultiImage = parts.length > 1;
+
   if (mode === 'kahwa') {
-    userInstruction = 'سولفلي واشرحلي هذا المقطع مثل كعدة كهوة بأسلوب عراقي ممتع وسلس ومبسط لأقصى درجة مع الحفاظ على المعنى الجوهري لزرادشت:\n\n';
+    userInstruction = isMultiImage
+      ? 'هذه صور لعدة صفحات متتالية من كتاب هكذا تكلم زرادشت. اقرأ النصوص من الصور بالترتيب وسولفلي واشرحلي الفكرة الكلية وسياقها مثل كعدة كهوة بأسلوب عراقي ممتع وسلس ومبسط لأقصى درجة:\n\n'
+      : 'سولفلي واشرحلي هذا المقطع مثل كعدة كهوة بأسلوب عراقي ممتع وسلس ومبسط لأقصى درجة مع الحفاظ على المعنى الجوهري لزرادشت:\n\n';
   } else if (mode === 'symbols') {
-    userInstruction = 'ركز على تفكيك الرموز والاستعارات الموجودة بهذا المقطع وشرح شنو تعني عند نيتشه بالتفصيل:\n\n';
+    userInstruction = isMultiImage
+      ? 'هذه صور لعدة صفحات من كتاب هكذا تكلم زرادشت. ركز على تفكيك وشرح جميع الرموز والاستعارات الموجودة في هذه الصفحات بالكامل وما ترمز إليه عند نيتشه:\n\n'
+      : 'ركز على تفكيك الرموز والاستعارات الموجودة بهذا المقطع وشرح شنو تعني عند نيتشه بالتفصيل:\n\n';
   } else if (mode === 'debate') {
     userInstruction = 'ناقش هذا المقطع فكرياً، شنو قوته وشنو الاعتراضات عليه، وشلون نطبقه بحياتنا اليومية:\n\n';
   } else {
-    userInstruction = 'حلل وفكك هذا المقطع من كتاب هكذا تكلم زرادشت بالتفصيل الكامل وباللهجة العراقية الذكية حسب الهيكل المعتمد:\n\n';
+    userInstruction = isMultiImage
+      ? 'هذه صور لعدة صفحات متتالية من كتاب هكذا تكلم زرادشت. اقرأ النصوص من جميع الصور بالترتيب وقدم تحليلاً فلسفياً متكاملاً وشاملاً وباللهجة العراقية الذكية حسب الهيكل المعتمد:\n\n'
+      : 'حلل وفكك هذا المقطع من كتاب هكذا تكلم زرادشت بالتفصيل الكامل وباللهجة العراقية الذكية حسب الهيكل المعتمد:\n\n';
   }
 
   if (text) {

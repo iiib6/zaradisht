@@ -1,5 +1,5 @@
 /**
- * رفيق زرادشت (Zarathustra Companion) - Frontend Controller with Live AI Diagnostics
+ * رفيق زرادشت (Zarathustra Companion) - Frontend Controller with Multi-Image Analysis
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -7,13 +7,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const tabs = document.querySelectorAll('.tab-btn');
   const tabPanes = document.querySelectorAll('.tab-pane');
   
-  // Image Upload Elements
+  // Image Upload Elements (Multiple)
   const dropZone = document.getElementById('dropZone');
   const imageInput = document.getElementById('imageInput');
   const dropContent = document.getElementById('dropContent');
-  const previewContainer = document.getElementById('previewContainer');
-  const imagePreview = document.getElementById('imagePreview');
-  const btnRemoveImage = document.getElementById('btnRemoveImage');
+  const galleryContainer = document.getElementById('galleryContainer');
+  const galleryGrid = document.getElementById('galleryGrid');
+  const galleryCount = document.getElementById('galleryCount');
+  const btnAddMoreImages = document.getElementById('btnAddMoreImages');
+  const btnClearAllImages = document.getElementById('btnClearAllImages');
   
   // Text Input & Samples
   const textInput = document.getElementById('textInput');
@@ -68,8 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const apiStatusBadge = document.getElementById('apiStatusBadge');
 
   // State
-  let currentImageBase64 = null;
-  let currentImageFile = null;
+  let uploadedImages = []; // Array of { id, base64, file }
   let currentRawAnalysis = '';
   let currentContextQuote = '';
   let activeTab = 'tab-image';
@@ -144,16 +145,27 @@ document.addEventListener('DOMContentLoaded', () => {
     return checked ? checked.value : 'full';
   }
 
+  // Multi-Image Upload & Drag-and-drop
   function setupImageHandlers() {
     dropZone.addEventListener('click', (e) => {
-      if (e.target !== btnRemoveImage && !btnRemoveImage.contains(e.target)) {
+      if (!e.target.closest('#galleryContainer') && !e.target.closest('button')) {
         imageInput.click();
       }
     });
 
+    btnAddMoreImages.addEventListener('click', (e) => {
+      e.stopPropagation();
+      imageInput.click();
+    });
+
+    btnClearAllImages.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearAllImages();
+    });
+
     imageInput.addEventListener('change', (e) => {
-      if (e.target.files && e.target.files[0]) {
-        handleImageFile(e.target.files[0]);
+      if (e.target.files && e.target.files.length) {
+        handleImageFiles(Array.from(e.target.files));
       }
     });
 
@@ -169,56 +181,92 @@ document.addEventListener('DOMContentLoaded', () => {
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault();
       dropZone.classList.remove('dragover');
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        handleImageFile(e.dataTransfer.files[0]);
+      if (e.dataTransfer.files && e.dataTransfer.files.length) {
+        handleImageFiles(Array.from(e.dataTransfer.files));
       }
-    });
-
-    btnRemoveImage.addEventListener('click', (e) => {
-      e.stopPropagation();
-      clearImage();
     });
   }
 
-  function handleImageFile(file) {
-    if (!file.type.startsWith('image/')) {
-      showToast('يرجى اختيار ملف صورة صالح (PNG, JPG, WEBP)', 'error');
+  function handleImageFiles(files) {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    if (!imageFiles.length) {
+      showToast('يرجى اختيار صور صالحة (PNG, JPG, WEBP)', 'error');
       return;
     }
 
-    currentImageFile = file;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      currentImageBase64 = e.target.result;
-      imagePreview.src = currentImageBase64;
-      dropContent.classList.add('hidden');
-      previewContainer.classList.remove('hidden');
-      showToast('تم تحميل صورة الصفحة بنجاح!', 'success');
-    };
-    reader.readAsDataURL(file);
+    let loadedCount = 0;
+    imageFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        uploadedImages.push({
+          id: Date.now() + Math.random(),
+          base64: e.target.result,
+          file: file
+        });
+        loadedCount++;
+        if (loadedCount === imageFiles.length) {
+          renderImageGallery();
+          showToast(`تمت إضافة ${loadedCount} صورة إلى قائمة التحليل!`, 'success');
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   }
 
-  function clearImage() {
-    currentImageFile = null;
-    currentImageBase64 = null;
+  function renderImageGallery() {
+    if (!uploadedImages.length) {
+      galleryContainer.classList.add('hidden');
+      dropContent.classList.remove('hidden');
+      return;
+    }
+
+    dropContent.classList.add('hidden');
+    galleryContainer.classList.remove('hidden');
+    galleryCount.textContent = `${uploadedImages.length} صور`;
+
+    galleryGrid.innerHTML = uploadedImages.map((img, idx) => `
+      <div class="gallery-item" data-id="${img.id}">
+        <img src="${img.base64}" alt="صفحة ${idx + 1}">
+        <span class="gallery-item-index">ص ${idx + 1}</span>
+        <button class="btn-remove-gallery-item" data-id="${img.id}" title="حذف الصورة">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    `).join('');
+
+    document.querySelectorAll('.btn-remove-gallery-item').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = Number(btn.dataset.id);
+        uploadedImages = uploadedImages.filter(img => img.id !== id);
+        renderImageGallery();
+      });
+    });
+  }
+
+  function clearAllImages() {
+    uploadedImages = [];
     imageInput.value = '';
-    imagePreview.src = '';
-    previewContainer.classList.add('hidden');
-    dropContent.classList.remove('hidden');
+    renderImageGallery();
+    showToast('تم مسح جميع الصور المرفوعة', 'info');
   }
 
+  // Global Ctrl + V paste listener for multiple images
   function setupGlobalPaste() {
     window.addEventListener('paste', (e) => {
       const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+      let pastedAny = false;
       for (const item of items) {
         if (item.type.indexOf('image') !== -1) {
           const blob = item.getAsFile();
-          handleImageFile(blob);
-          const imgTabBtn = document.querySelector('[data-tab="tab-image"]');
-          if (imgTabBtn) imgTabBtn.click();
-          showToast('تم لصق لقطة الشاشة من الحافظة مباشرة!', 'success');
-          break;
+          handleImageFiles([blob]);
+          pastedAny = true;
         }
+      }
+      if (pastedAny) {
+        const imgTabBtn = document.querySelector('[data-tab="tab-image"]');
+        if (imgTabBtn) imgTabBtn.click();
+        showToast('تم لصق الصورة من الحافظة مباشرة!', 'success');
       }
     });
   }
@@ -301,31 +349,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function executeAnalysis(overrideMode = null) {
     let textToAnalyze = '';
-    let imageBase64 = null;
+    let imagesToSend = [];
 
     if (activeTab === 'tab-image') {
-      imageBase64 = currentImageBase64;
+      imagesToSend = uploadedImages.map(img => img.base64);
     } else if (activeTab === 'tab-text') {
       textToAnalyze = textInput.value.trim();
     } else if (activeTab === 'tab-file') {
       textToAnalyze = docExtractedText.value.trim();
     }
 
-    if (!imageBase64 && !textToAnalyze) {
+    if (!imagesToSend.length && !textToAnalyze) {
       if (textInput.value.trim()) textToAnalyze = textInput.value.trim();
       else if (docExtractedText.value.trim()) textToAnalyze = docExtractedText.value.trim();
-      else if (currentImageBase64) imageBase64 = currentImageBase64;
+      else if (uploadedImages.length) imagesToSend = uploadedImages.map(img => img.base64);
     }
 
     const userPrompt = customUserPrompt.value.trim();
     const mode = overrideMode || getSelectedMode();
 
-    if (!imageBase64 && !textToAnalyze && !userPrompt) {
+    if (!imagesToSend.length && !textToAnalyze && !userPrompt) {
       showToast('يرجى وضع صورة أو نص أو كتابة سؤال للتحليل', 'error');
       return;
     }
 
-    currentContextQuote = textToAnalyze || 'صورة صفحة من كتاب زرادشت';
+    currentContextQuote = textToAnalyze || (imagesToSend.length > 1 ? `${imagesToSend.length} صفحات مصورة من كتاب زرادشت` : 'صورة صفحة من كتاب زرادشت');
 
     outputPlaceholder.classList.add('hidden');
     analysisContentArea.classList.remove('hidden');
@@ -347,7 +395,8 @@ document.addEventListener('DOMContentLoaded', () => {
         text: textToAnalyze,
         prompt: userPrompt,
         mode: mode,
-        imageBase64: imageBase64,
+        imagesBase64: imagesToSend,
+        imageBase64: imagesToSend[0] || null, // backward compatibility
         customKey: storedKey
       };
 
@@ -406,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       followupChatSection.classList.remove('hidden');
-      showToast('اكتمل الشرح والتحليل الفلسفي!', 'success');
+      showToast('اكتمل الشرح والتحليل الفلسفي للصور!', 'success');
 
     } catch (err) {
       streamingBadge.classList.add('hidden');
@@ -414,9 +463,8 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="settings-status error" style="padding:16px;">
           <i class="fa-solid fa-triangle-exclamation" style="font-size:22px;"></i>
           <div>
-            <strong>تنبيه من السيرفر:</strong>
+            <strong>تنبيه:</strong>
             <p style="margin-top:6px; color:#fff;">${err.message}</p>
-            <small style="color:var(--gold-300);">💡 إذا كنت على Vercel، تأكد من إضافة <b>GOOGLE_SERVICE_ACCOUNT_KEY</b> أو <b>GEMINI_API_KEY</b> في إعدادات Vercel.</small>
           </div>
         </div>
       `;
@@ -778,7 +826,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
       } else {
         apiStatusBadge.className = 'settings-status error';
-        apiStatusBadge.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i><span>يرجى إضافة مفتاح Google Service Account في Vercel</span>';
+        apiStatusBadge.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i><span>يرجى إضافة مفتاح Gemini API</span>';
       }
     } catch (e) {
       apiStatusBadge.className = 'settings-status error';
