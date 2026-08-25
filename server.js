@@ -34,35 +34,48 @@ const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 }
 });
 
-// Locate Google Service Account Key JSON
-function findServiceAccountKey() {
+// Locate or parse Google Service Account
+let googleAuthClient = null;
+let projectId = 'gen-lang-client-0148309017';
+
+function initGoogleAuth() {
+  // Option A: From Environment Variable (Ideal for Vercel / Cloud)
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+    try {
+      const credentials = typeof process.env.GOOGLE_SERVICE_ACCOUNT_KEY === 'string'
+        ? JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY)
+        : process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+      
+      projectId = credentials.project_id || projectId;
+      googleAuthClient = new GoogleAuth({
+        credentials: credentials,
+        scopes: ['https://www.googleapis.com/auth/cloud-platform']
+      });
+      console.log(`🔑 تم تفعيل مفتاح Google Cloud Console من متغيرات البيئة السحابية (Vercel)`);
+      return;
+    } catch (e) {
+      console.error('خطأ في معالجة GOOGLE_SERVICE_ACCOUNT_KEY من متغيرات البيئة:', e.message);
+    }
+  }
+
+  // Option B: From local JSON file (Local Desktop)
   try {
     const files = fs.readdirSync(__dirname);
     const jsonKey = files.find(f => f.startsWith('gen-lang-client-') && f.endsWith('.json'));
     if (jsonKey) {
-      return path.join(__dirname, jsonKey);
+      const serviceAccountPath = path.join(__dirname, jsonKey);
+      const keyData = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8'));
+      projectId = keyData.project_id || projectId;
+      googleAuthClient = new GoogleAuth({
+        keyFile: serviceAccountPath,
+        scopes: ['https://www.googleapis.com/auth/cloud-platform']
+      });
+      console.log(`🔑 تم تفعيل مفتاح Google Cloud Console من الملف المحلي: [${jsonKey}]`);
     }
   } catch (e) {}
-  return null;
 }
 
-const serviceAccountPath = findServiceAccountKey();
-let googleAuthClient = null;
-let projectId = 'gen-lang-client-0148309017';
-
-if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
-  try {
-    const keyData = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8'));
-    projectId = keyData.project_id || projectId;
-    googleAuthClient = new GoogleAuth({
-      keyFile: serviceAccountPath,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform']
-    });
-    console.log(`🔑 تم تفعيل مفتاح Google Cloud Console: [${path.basename(serviceAccountPath)}]`);
-  } catch (e) {
-    console.error('فشل قراءة مفتاح حساب الخدمة:', e);
-  }
-}
+initGoogleAuth();
 
 // Master Nietzschean Iraqi Scholar System Instruction
 const SYSTEM_PROMPT = `
@@ -95,7 +108,7 @@ const SYSTEM_PROMPT = `
 // Helper: Stream response from Vertex AI Global Endpoint
 async function streamVertexAI(contents, systemPrompt, res, modelName = 'gemini-3.7-flash') {
   if (!googleAuthClient) {
-    throw new Error('لم يتم العثور على مفتاح Google Console Service Account.');
+    throw new Error('لم يتم العثور على مصادقة Google Console.');
   }
 
   const client = await googleAuthClient.getClient();
@@ -229,8 +242,7 @@ app.get('/api/status', async (req, res) => {
   res.json({
     status: 'ok',
     hasApiKey: hasServiceAccount || hasEnvKey,
-    authMethod: hasServiceAccount ? 'Google Cloud Service Account (Console)' : (hasEnvKey ? 'API Key' : 'none'),
-    serviceAccountKey: serviceAccountPath ? path.basename(serviceAccountPath) : null,
+    authMethod: hasServiceAccount ? 'Google Cloud Service Account (Console JSON)' : (hasEnvKey ? 'API Key' : 'none'),
     projectId: projectId,
     port: PORT,
     localIp: getLocalIp(),
@@ -434,7 +446,6 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// Start server if not running in a serverless environment (e.g. Vercel)
 if (!process.env.VERCEL) {
   app.listen(PORT, HOST, () => {
     const localIp = getLocalIp();
