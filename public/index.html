@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>رفيق زرادشت | المحلل الفلسفي الذكي</title>
+  
+  <!-- Google Fonts for High-End Arabic Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Readex+Pro:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Marked.js for Markdown Rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Ambient Background Glows -->
+  <div class="ambient-glow glow-top"></div>
+  <div class="ambient-glow glow-bottom"></div>
+
+  <!-- Header Navigation -->
+  <header class="app-header">
+    <div class="header-content container">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-feather-pointed"></i>
+          <span class="icon-pulse"></span>
+        </div>
+        <div class="brand-text">
+          <h1>هكذا تكلم زرادشت</h1>
+          <p>الرفيق الفلسفي الذكي • تفكيك وشرح باللهجة العراقية</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="btnGlossary" class="btn-secondary" title="قاموس الرموز والمفاهيم">
+          <i class="fa-solid fa-book-bookmark"></i>
+          <span>قاموس الرموز</span>
+        </button>
+        <button id="btnJournal" class="btn-secondary" title="دفتر القراءة والملاحظات">
+          <i class="fa-solid fa-star"></i>
+          <span>المحفوظات</span>
+          <span id="journalCount" class="badge">0</span>
+        </button>
+        <button id="btnSettings" class="btn-icon" title="الإعدادات ومفتاح API">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-layout container">
+    
+    <!-- Left Column: Input & Controls -->
+    <section class="input-panel card">
+      
+      <!-- Input Tabs -->
+      <div class="tabs-header">
+        <button class="tab-btn active" data-tab="tab-image">
+          <i class="fa-solid fa-camera"></i>
+          <span>صورة صفحة</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-text">
+          <i class="fa-solid fa-quote-right"></i>
+          <span>نص أو حكمة</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-file">
+          <i class="fa-solid fa-file-lines"></i>
+          <span>رفع ملف (PDF)</span>
+        </button>
+      </div>
+
+      <!-- Tab Contents -->
+      <div class="tabs-body">
+        
+        <!-- Tab 1: Image / Screenshot Paste -->
+        <div id="tab-image" class="tab-pane active">
+          <div class="drop-zone" id="dropZone">
+            <input type="file" id="imageInput" accept="image/*" class="file-input-hidden">
+            <div class="drop-content" id="dropContent">
+              <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+              <h3>اسحب الصورة هنا أو اضغط للاختيار</h3>
+              <p class="drop-hint">أو اضغط <kbd>Ctrl</kbd> + <kbd>V</kbd> بأي مكان للصق لقطة الشاشة مباشرة!</p>
+            </div>
+            <div class="preview-container hidden" id="previewContainer">
+              <img id="imagePreview" alt="معاينة الصفحة">
+              <button id="btnRemoveImage" class="btn-remove-img" title="حذف الصورة">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Text Snippet -->
+        <div id="tab-text" class="tab-pane">
+          <div class="text-input-wrap">
+            <textarea id="textInput" placeholder="الصق أي مقطع، خطبة، أو فكرة صعبة من كتاب زرادشت هنا..."></textarea>
+            
+            <!-- Quick Preset Samples -->
+            <div class="sample-quotes">
+              <span class="sample-label">أمثلة سريعة:</span>
+              <button class="quote-chip" data-quote="الإنسان حبل مشدود بين الحيوان والإنسان المتفوق؛ حبل فوق هاوية. إن العبور لخطر، والسير لخطر، والالتفات إلى الوراء لخطر، والارتعاد والوقوف لخطر.">الحبل فوق الهاوية</button>
+              <button class="quote-chip" data-quote="أسمي لكم ثلاث تحولات للروح: كيف تصبح الروح جملاً، وكيف يصبح الجمل أسداً، وكيف يصبح الأسد طفلاً في النهاية.">التحولات الثلاثة</button>
+              <button class="quote-chip" data-quote="كلما أرادت الشجرة أن ترتفع إلى الأعالي وإلى النور، توغلت جذورها إلى أعماق الأرض والظلمات والهاوية.">شجرة الجبل</button>
+              <button class="quote-chip" data-quote="اهرب يا صديقي إلى عزلتك! أراك ملدوغاً بذبّان مسموم؛ اهرب إلى حيث تهب الريح العاصفة النقية!">ذباب السوق</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Document File -->
+        <div id="tab-file" class="tab-pane">
+          <div class="file-drop-zone" id="fileDropZone">
+            <input type="file" id="docFileInput" accept=".pdf,.txt,.md,.doc,.docx" class="file-input-hidden">
+            <div class="file-drop-content">
+              <i class="fa-solid fa-file-pdf file-icon"></i>
+              <h3>ارفع ملف PDF أو مستند نصي</h3>
+              <p>سيقوم النظام باستخراج النصوص وفهرستها للتحليل</p>
+            </div>
+          </div>
+          <div id="docExtractPreview" class="doc-preview hidden">
+            <div class="doc-meta">
+              <span id="docFileName"><i class="fa-solid fa-file"></i> <span></span></span>
+              <button id="btnRemoveDoc" class="btn-text-sm"><i class="fa-solid fa-trash"></i> إزالة</button>
+            </div>
+            <textarea id="docExtractedText" rows="6" placeholder="النص المستخرج من الملف..."></textarea>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Analysis Modes -->
+      <div class="analysis-modes">
+        <label class="mode-title">نمط التحليل والشرح:</label>
+        <div class="mode-options">
+          <label class="mode-card active">
+            <input type="radio" name="analysisMode" value="full" checked>
+            <div class="mode-info">
+              <i class="fa-solid fa-brain"></i>
+              <div>
+                <strong>تحليل وتفكيك شامل</strong>
+                <span>شرح عراقي عميق + رموز + سياق + إسقاط واقعي</span>
+              </div>
+            </div>
+          </label>
+
+          <label class="mode-card">
+            <input type="radio" name="analysisMode" value="kahwa">
+            <div class="mode-info">
+              <i class="fa-solid fa-mug-hot"></i>
+              <div>
+                <strong>سولفها مثل كعدة كهوة</strong>
+                <span>تبسيط أقصى بأسلوب قصصي ممتع وسلس</span>
+              </div>
+            </div>
+          </label>
+
+          <label class="mode-card">
+            <input type="radio" name="analysisMode" value="symbols">
+            <div class="mode-info">
+              <i class="fa-solid fa-magnifying-glass-chart"></i>
+              <div>
+                <strong>تفكيك الرموز والاستعارات</strong>
+                <span>التركيز على الشفرات الفلسفية والمعاني الباطنة</span>
+              </div>
+            </div>
+          </label>
+
+          <label class="mode-card">
+            <input type="radio" name="analysisMode" value="debate">
+            <div class="mode-info">
+              <i class="fa-solid fa-scale-balanced"></i>
+              <div>
+                <strong>نقاش ومواقف فلسفية</strong>
+                <span>نقد، اعتراضات، وقوة الفكرة بالحياة المعاصرة</span>
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Optional Extra Question/Prompt -->
+      <div class="extra-prompt-wrap">
+        <input type="text" id="customUserPrompt" placeholder="سؤال إضافي أو نقطة معينة تحب يركز عليها؟ (اختياري)">
+      </div>
+
+      <!-- Action Button -->
+      <button id="btnAnalyze" class="btn-primary glow-button">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+        <span>فكك واشرح بالعراقي</span>
+      </button>
+
+    </section>
+
+    <!-- Right Column: Analysis Workspace & Results -->
+    <section class="output-panel card">
+      
+      <div class="output-header">
+        <div class="output-title">
+          <i class="fa-solid fa-scroll"></i>
+          <h2>التحليل والتفكيك الفلسفي</h2>
+        </div>
+        
+        <div class="output-tools" id="outputTools" style="display: none;">
+          <button id="btnSpeak" class="tool-btn" title="قراءة صوتية">
+            <i class="fa-solid fa-volume-high"></i>
+          </button>
+          <button id="btnCopyAnalysis" class="tool-btn" title="نسخ التحليل">
+            <i class="fa-solid fa-copy"></i>
+          </button>
+          <button id="btnSaveToJournal" class="tool-btn" title="حفظ في المفضلة">
+            <i class="fa-regular fa-bookmark"></i>
+          </button>
+          <button id="btnSimplifyMore" class="tool-btn highlight" title="بسطها بعد أكثر!">
+            <i class="fa-solid fa-mug-hot"></i>
+            <span>سولفها كهوة</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Status / Placeholder State -->
+      <div id="outputPlaceholder" class="empty-state">
+        <div class="empty-icon">
+          <i class="fa-solid fa-mountain-sun"></i>
+        </div>
+        <h3>مرحباً بك في مجلس زرادشت الفلسفي</h3>
+        <p>ارفع صورة صفحة من الكتاب، أو الصق مقطعاً غامضاً، وسيقوم الذكاء الاصطناعي بتفكيك أسراره ورموزه وشرحه لك بالعامية العراقية الممتعة والعميقة.</p>
+        <div class="feature-bullets">
+          <div class="bullet-item"><i class="fa-solid fa-bolt"></i> استجابة فائقة السرعة بدون أي تأخير</div>
+          <div class="bullet-item"><i class="fa-solid fa-eye"></i> قراءة دقيقة لصور صفحات الكتب (OCR)</div>
+          <div class="bullet-item"><i class="fa-solid fa-comments"></i> إمكانية النقاش الحي وسؤال الفيلسوف</div>
+        </div>
+      </div>
+
+      <!-- Streaming / Output Content Container -->
+      <div id="analysisContentArea" class="analysis-result-box hidden">
+        <div id="streamingBadge" class="streaming-indicator hidden">
+          <span class="dot"></span>
+          <span>زرادشت يفكر ويكتب الآن...</span>
+        </div>
+        <div id="analysisOutput" class="markdown-body"></div>
+      </div>
+
+      <!-- Socratic Debate Chat Box (Appears after analysis) -->
+      <div id="followupChatSection" class="followup-section hidden">
+        <div class="followup-header">
+          <i class="fa-solid fa-comments"></i>
+          <h4>ناقش زرادشت حول هذا المقطع</h4>
+        </div>
+        <div id="chatHistory" class="chat-history-box"></div>
+        <div class="chat-input-row">
+          <input type="text" id="chatInput" placeholder="اسأل: زين شنو قصده؟ أو اعترض: مو هذا الكلام قاسي؟">
+          <button id="btnSendChat" class="btn-chat-send">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Modal 1: Glossary (قاموس رموز زرادشت) -->
+  <div id="glossaryModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-book-open-reader"></i>
+          <h3>قاموس رموز ومفاهيم زرادشت</h3>
+        </div>
+        <button class="btn-close-modal" data-close="glossaryModal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-search">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="glossarySearch" placeholder="ابحث عن رمز (النسر، الأفعى، الحبل، العود الأبدي...)">
+      </div>
+      <div class="modal-body" id="glossaryList">
+        <!-- Glossary items loaded dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Reading Journal (المحفوظات) -->
+  <div id="journalModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-star"></i>
+          <h3>دفتر القراءة والملاحظات المحفوظة</h3>
+        </div>
+        <button class="btn-close-modal" data-close="journalModal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="journal-actions">
+        <button id="btnExportJournal" class="btn-text-sm"><i class="fa-solid fa-download"></i> تصدير الملاحظات (Markdown)</button>
+        <button id="btnClearJournal" class="btn-text-sm danger"><i class="fa-solid fa-trash-can"></i> مسح الكل</button>
+      </div>
+      <div class="modal-body" id="journalList">
+        <!-- Saved items loaded dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 3: Settings & API Key -->
+  <div id="settingsModal" class="modal-backdrop hidden">
+    <div class="modal-card settings-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-gear"></i>
+          <h3>إعدادات الذكاء الاصطناعي</h3>
+        </div>
+        <button class="btn-close-modal" data-close="settingsModal"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="apiKeyInput">مفتاح Google Gemini API Key:</label>
+          <div class="input-with-action">
+            <input type="password" id="apiKeyInput" placeholder="AIzaSy...">
+            <button id="btnToggleKeyVisibility" class="btn-icon-sm"><i class="fa-solid fa-eye"></i></button>
+          </div>
+          <p class="form-hint">المفتاح يتم حفظه بأمان بحاسبتك فقط. إذا ما عندك مفتاح، تكدر تطلعه مجاناً وبثواني من Google AI Studio.</p>
+        </div>
+        
+        <div class="settings-status" id="apiStatusBadge">
+          <i class="fa-solid fa-circle-check"></i>
+          <span>حالة الاتصال: جاري الفحص...</span>
+        </div>
+
+        <button id="btnSaveSettings" class="btn-primary">
+          <i class="fa-solid fa-floppy-disk"></i>
+          <span>حفظ الإعدادات</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification System -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

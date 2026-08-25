@@ -1,0 +1,23 @@
+{
+  "name": "zarathustra-companion",
+  "version": "1.0.0",
+  "description": "رفيق قراءة وتحليل كتاب هكذا تكلم زرادشت باللهجة العراقية والذكاء الاصطناعي الفائق",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@google-cloud/vertexai": "^1.12.0",
+    "@google/generative-ai": "^0.24.1",
+    "better-sqlite3": "^13.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "google-auth-library": "^11.0.2",
+    "multer": "^2.2.0",
+    "pdf-parse": "^2.4.5",
+    "pg": "^8.23.0"
+  }
+}

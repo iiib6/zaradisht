@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.local
+gen-lang-client-*.json
+*.pem
+*.key
+data/
+*.db
+*.sqlite
+*.log
+npm-debug.log*
+.DS_Store
